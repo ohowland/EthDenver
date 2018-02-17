@@ -1,0 +1,2170 @@
+{
+  "contractName": "MeterInterface",
+  "abi": [
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "device_index",
+      "outputs": [
+        {
+          "name": "kwh_produced",
+          "type": "uint256"
+        },
+        {
+          "name": "kwh_consumed",
+          "type": "uint256"
+        },
+        {
+          "name": "valid_consumer",
+          "type": "bool"
+        },
+        {
+          "name": "valid_producer",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "_producer",
+          "type": "address"
+        }
+      ],
+      "name": "whitelistProducer",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "_consumer",
+          "type": "address"
+        }
+      ],
+      "name": "whitelistConsumer",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "_kwh",
+          "type": "uint256"
+        }
+      ],
+      "name": "generateKwh",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "_energy_exchange",
+          "type": "address"
+        }
+      ],
+      "name": "setExchange",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "sourceMap": "",
+  "deployedSourceMap": "",
+  "source": "pragma solidity ^0.4.18;\n\nimport \"../../EthDenver/contracts/Exchange.sol\";\nimport \"../../zeppelin-solidity/contracts/ownership/Ownable.sol\";\nimport \"../../zeppelin-solidity/contracts/math/SafeMath.sol\";\n\n/// @title The interface for a metering device.\ncontract MeterInterface is Ownable {\n  \n  /* @dev The device contains all the production information about a meter.\n   * note that kwh is the standard units of energy Kilo-Watt-Hour\n   */\n  struct Device { \n    // @dev kwh_produced is the positive transfer of energy from the\n    // device to the bus.\n    uint256 kwh_produced;\n\n    // @dev kwh_consumed is the positive transfer of energy from the bus\n    // to the device.\n    uint256 kwh_consumed;\n\n    // @dev Device's current designation as a consumer;\n    bool valid_consumer;\n\n    // @dev Device's current designation as a producer;\n    bool valid_producer;\n  }\n\n  // @dev An address mapping to the Device struct.\n  mapping (address => Device) public device_index;\n  MicrogridExchangeInterface microgrid_exchange;\n\n  // @dev assigns the right to produce to a device.\n  function whitelistProducer(address _producer) external;\n\n  // @dev assigns the right to consume to a device.\n  function whitelistConsumer(address _consumer) external;\n  \n  // @dev Generate event log of kilowatt-hours generated.\n  function generateKwh(uint256 _kwh) external;\n\n  function setExchange(address _energy_exchange) external;\n}\n\ncontract OperatorsAgreement is MeterInterface {\n  using SafeMath for uint256;\n\n  // @dev Event used to log the sender's ID and the am\n  event logKwhGeneration(address _sender, uint256 _kwh);\n  event logKwhConsumption(address _sender, uint256 _kwh);\n\n  // @dev assigns the right to produce to a device\n  function whitelistProducer(address _producer) external onlyOwner {\n    device_index[_producer].valid_producer = true;\n  }\n\n  // @dev assigns the right to consume to a device.\n  function whitelistConsumer(address _consumer) external onlyOwner {\n    device_index[_consumer].valid_consumer = true;\n  } \n\n  /** @dev Allow trusted device to log generated kwh with\n    * microgrid exchange.\n    * @param _kwh The current totalized production watt hours\n    * @return Boolean if operation completes\n    *\n    */\n  function generateKwh(uint256 _kwh) external {\n    // @dev add the newly generated watt-hours to available for trade\n    require(device_index[msg.sender].valid_producer);\n\n    // @dev kwh are a totalized counter, find the latest kwh generated.\n    // @notice the roll over must be dealt with gracefully.\n    uint256 new_kwh = _kwh.sub(device_index[msg.sender].kwh_produced);   \n\n    // @dev Call the external microgrid exchange contract  \n    microgrid_exchange.requestMint(new_kwh);\n\n    device_index[msg.sender].kwh_produced = _kwh;\n    logKwhGeneration(msg.sender, _kwh);\n  }\n  \n  function setExchange(address _energy_exchange) external onlyOwner {\n    microgrid_exchange = MicrogridExchangeInterface(_energy_exchange);\n  }\n\n}\n\n",
+  "sourcePath": "/home/owen/dev/EthDenver/contracts/OperatorsAgreement.sol",
+  "ast": {
+    "attributes": {
+      "absolutePath": "/home/owen/dev/EthDenver/contracts/OperatorsAgreement.sol",
+      "exportedSymbols": {
+        "MeterInterface": [
+          141
+        ],
+        "OperatorsAgreement": [
+          248
+        ]
+      }
+    },
+    "children": [
+      {
+        "attributes": {
+          "literals": [
+            "solidity",
+            "^",
+            "0.4",
+            ".18"
+          ]
+        },
+        "id": 100,
+        "name": "PragmaDirective",
+        "src": "0:24:1"
+      },
+      {
+        "attributes": {
+          "SourceUnit": 99,
+          "absolutePath": "/home/owen/dev/EthDenver/contracts/Exchange.sol",
+          "file": "../../EthDenver/contracts/Exchange.sol",
+          "scope": 249,
+          "symbolAliases": [
+            null
+          ],
+          "unitAlias": ""
+        },
+        "id": 101,
+        "name": "ImportDirective",
+        "src": "26:48:1"
+      },
+      {
+        "attributes": {
+          "SourceUnit": 403,
+          "absolutePath": "/home/owen/dev/zeppelin-solidity/contracts/ownership/Ownable.sol",
+          "file": "../../zeppelin-solidity/contracts/ownership/Ownable.sol",
+          "scope": 249,
+          "symbolAliases": [
+            null
+          ],
+          "unitAlias": ""
+        },
+        "id": 102,
+        "name": "ImportDirective",
+        "src": "75:65:1"
+      },
+      {
+        "attributes": {
+          "SourceUnit": 347,
+          "absolutePath": "/home/owen/dev/zeppelin-solidity/contracts/math/SafeMath.sol",
+          "file": "../../zeppelin-solidity/contracts/math/SafeMath.sol",
+          "scope": 249,
+          "symbolAliases": [
+            null
+          ],
+          "unitAlias": ""
+        },
+        "id": 103,
+        "name": "ImportDirective",
+        "src": "141:61:1"
+      },
+      {
+        "attributes": {
+          "contractDependencies": [
+            402
+          ],
+          "contractKind": "contract",
+          "documentation": "@title The interface for a metering device.",
+          "fullyImplemented": false,
+          "linearizedBaseContracts": [
+            141,
+            402
+          ],
+          "name": "MeterInterface",
+          "scope": 249
+        },
+        "children": [
+          {
+            "attributes": {
+              "arguments": [
+                null
+              ]
+            },
+            "children": [
+              {
+                "attributes": {
+                  "contractScope": null,
+                  "name": "Ownable",
+                  "referencedDeclaration": 402,
+                  "type": "contract Ownable"
+                },
+                "id": 104,
+                "name": "UserDefinedTypeName",
+                "src": "279:7:1"
+              }
+            ],
+            "id": 105,
+            "name": "InheritanceSpecifier",
+            "src": "279:7:1"
+          },
+          {
+            "attributes": {
+              "canonicalName": "MeterInterface.Device",
+              "name": "Device",
+              "scope": 141,
+              "visibility": "public"
+            },
+            "children": [
+              {
+                "attributes": {
+                  "constant": false,
+                  "name": "kwh_produced",
+                  "scope": 114,
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "type": "uint256",
+                  "value": null,
+                  "visibility": "internal"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "name": "uint256",
+                      "type": "uint256"
+                    },
+                    "id": 106,
+                    "name": "ElementaryTypeName",
+                    "src": "558:7:1"
+                  }
+                ],
+                "id": 107,
+                "name": "VariableDeclaration",
+                "src": "558:20:1"
+              },
+              {
+                "attributes": {
+                  "constant": false,
+                  "name": "kwh_consumed",
+                  "scope": 114,
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "type": "uint256",
+                  "value": null,
+                  "visibility": "internal"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "name": "uint256",
+                      "type": "uint256"
+                    },
+                    "id": 108,
+                    "name": "ElementaryTypeName",
+                    "src": "680:7:1"
+                  }
+                ],
+                "id": 109,
+                "name": "VariableDeclaration",
+                "src": "680:20:1"
+              },
+              {
+                "attributes": {
+                  "constant": false,
+                  "name": "valid_consumer",
+                  "scope": 114,
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "type": "bool",
+                  "value": null,
+                  "visibility": "internal"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "name": "bool",
+                      "type": "bool"
+                    },
+                    "id": 110,
+                    "name": "ElementaryTypeName",
+                    "src": "763:4:1"
+                  }
+                ],
+                "id": 111,
+                "name": "VariableDeclaration",
+                "src": "763:19:1"
+              },
+              {
+                "attributes": {
+                  "constant": false,
+                  "name": "valid_producer",
+                  "scope": 114,
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "type": "bool",
+                  "value": null,
+                  "visibility": "internal"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "name": "bool",
+                      "type": "bool"
+                    },
+                    "id": 112,
+                    "name": "ElementaryTypeName",
+                    "src": "845:4:1"
+                  }
+                ],
+                "id": 113,
+                "name": "VariableDeclaration",
+                "src": "845:19:1"
+              }
+            ],
+            "id": 114,
+            "name": "StructDefinition",
+            "src": "442:427:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "name": "device_index",
+              "scope": 141,
+              "stateVariable": true,
+              "storageLocation": "default",
+              "type": "mapping(address => struct MeterInterface.Device storage ref)",
+              "value": null,
+              "visibility": "public"
+            },
+            "children": [
+              {
+                "attributes": {
+                  "type": "mapping(address => struct MeterInterface.Device storage ref)"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "name": "address",
+                      "type": "address"
+                    },
+                    "id": 115,
+                    "name": "ElementaryTypeName",
+                    "src": "933:7:1"
+                  },
+                  {
+                    "attributes": {
+                      "contractScope": null,
+                      "name": "Device",
+                      "referencedDeclaration": 114,
+                      "type": "struct MeterInterface.Device storage pointer"
+                    },
+                    "id": 116,
+                    "name": "UserDefinedTypeName",
+                    "src": "944:6:1"
+                  }
+                ],
+                "id": 117,
+                "name": "Mapping",
+                "src": "924:27:1"
+              }
+            ],
+            "id": 118,
+            "name": "VariableDeclaration",
+            "src": "924:47:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "name": "microgrid_exchange",
+              "scope": 141,
+              "stateVariable": true,
+              "storageLocation": "default",
+              "type": "contract MicrogridExchangeInterface",
+              "value": null,
+              "visibility": "internal"
+            },
+            "children": [
+              {
+                "attributes": {
+                  "contractScope": null,
+                  "name": "MicrogridExchangeInterface",
+                  "referencedDeclaration": 47,
+                  "type": "contract MicrogridExchangeInterface"
+                },
+                "id": 119,
+                "name": "UserDefinedTypeName",
+                "src": "975:26:1"
+              }
+            ],
+            "id": 120,
+            "name": "VariableDeclaration",
+            "src": "975:45:1"
+          },
+          {
+            "attributes": {
+              "body": null,
+              "constant": false,
+              "implemented": false,
+              "isConstructor": false,
+              "modifiers": [
+                null
+              ],
+              "name": "whitelistProducer",
+              "payable": false,
+              "scope": 141,
+              "stateMutability": "nonpayable",
+              "superFunction": null,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_producer",
+                      "scope": 125,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 121,
+                        "name": "ElementaryTypeName",
+                        "src": "1104:7:1"
+                      }
+                    ],
+                    "id": 122,
+                    "name": "VariableDeclaration",
+                    "src": "1104:17:1"
+                  }
+                ],
+                "id": 123,
+                "name": "ParameterList",
+                "src": "1103:19:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 124,
+                "name": "ParameterList",
+                "src": "1131:0:1"
+              }
+            ],
+            "id": 125,
+            "name": "FunctionDefinition",
+            "src": "1077:55:1"
+          },
+          {
+            "attributes": {
+              "body": null,
+              "constant": false,
+              "implemented": false,
+              "isConstructor": false,
+              "modifiers": [
+                null
+              ],
+              "name": "whitelistConsumer",
+              "payable": false,
+              "scope": 141,
+              "stateMutability": "nonpayable",
+              "superFunction": null,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_consumer",
+                      "scope": 130,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 126,
+                        "name": "ElementaryTypeName",
+                        "src": "1215:7:1"
+                      }
+                    ],
+                    "id": 127,
+                    "name": "VariableDeclaration",
+                    "src": "1215:17:1"
+                  }
+                ],
+                "id": 128,
+                "name": "ParameterList",
+                "src": "1214:19:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 129,
+                "name": "ParameterList",
+                "src": "1242:0:1"
+              }
+            ],
+            "id": 130,
+            "name": "FunctionDefinition",
+            "src": "1188:55:1"
+          },
+          {
+            "attributes": {
+              "body": null,
+              "constant": false,
+              "implemented": false,
+              "isConstructor": false,
+              "modifiers": [
+                null
+              ],
+              "name": "generateKwh",
+              "payable": false,
+              "scope": 141,
+              "stateMutability": "nonpayable",
+              "superFunction": null,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_kwh",
+                      "scope": 135,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "uint256",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "uint256",
+                          "type": "uint256"
+                        },
+                        "id": 131,
+                        "name": "ElementaryTypeName",
+                        "src": "1328:7:1"
+                      }
+                    ],
+                    "id": 132,
+                    "name": "VariableDeclaration",
+                    "src": "1328:12:1"
+                  }
+                ],
+                "id": 133,
+                "name": "ParameterList",
+                "src": "1327:14:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 134,
+                "name": "ParameterList",
+                "src": "1350:0:1"
+              }
+            ],
+            "id": 135,
+            "name": "FunctionDefinition",
+            "src": "1307:44:1"
+          },
+          {
+            "attributes": {
+              "body": null,
+              "constant": false,
+              "implemented": false,
+              "isConstructor": false,
+              "modifiers": [
+                null
+              ],
+              "name": "setExchange",
+              "payable": false,
+              "scope": 141,
+              "stateMutability": "nonpayable",
+              "superFunction": null,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_energy_exchange",
+                      "scope": 140,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 136,
+                        "name": "ElementaryTypeName",
+                        "src": "1376:7:1"
+                      }
+                    ],
+                    "id": 137,
+                    "name": "VariableDeclaration",
+                    "src": "1376:24:1"
+                  }
+                ],
+                "id": 138,
+                "name": "ParameterList",
+                "src": "1375:26:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 139,
+                "name": "ParameterList",
+                "src": "1410:0:1"
+              }
+            ],
+            "id": 140,
+            "name": "FunctionDefinition",
+            "src": "1355:56:1"
+          }
+        ],
+        "id": 141,
+        "name": "ContractDefinition",
+        "src": "252:1161:1"
+      },
+      {
+        "attributes": {
+          "contractDependencies": [
+            141,
+            402
+          ],
+          "contractKind": "contract",
+          "documentation": null,
+          "fullyImplemented": true,
+          "linearizedBaseContracts": [
+            248,
+            141,
+            402
+          ],
+          "name": "OperatorsAgreement",
+          "scope": 249
+        },
+        "children": [
+          {
+            "attributes": {
+              "arguments": [
+                null
+              ]
+            },
+            "children": [
+              {
+                "attributes": {
+                  "contractScope": null,
+                  "name": "MeterInterface",
+                  "referencedDeclaration": 141,
+                  "type": "contract MeterInterface"
+                },
+                "id": 142,
+                "name": "UserDefinedTypeName",
+                "src": "1446:14:1"
+              }
+            ],
+            "id": 143,
+            "name": "InheritanceSpecifier",
+            "src": "1446:14:1"
+          },
+          {
+            "children": [
+              {
+                "attributes": {
+                  "contractScope": null,
+                  "name": "SafeMath",
+                  "referencedDeclaration": 346,
+                  "type": "library SafeMath"
+                },
+                "id": 144,
+                "name": "UserDefinedTypeName",
+                "src": "1471:8:1"
+              },
+              {
+                "attributes": {
+                  "name": "uint256",
+                  "type": "uint256"
+                },
+                "id": 145,
+                "name": "ElementaryTypeName",
+                "src": "1484:7:1"
+              }
+            ],
+            "id": 146,
+            "name": "UsingForDirective",
+            "src": "1465:27:1"
+          },
+          {
+            "attributes": {
+              "anonymous": false,
+              "name": "logKwhGeneration"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "indexed": false,
+                      "name": "_sender",
+                      "scope": 152,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 147,
+                        "name": "ElementaryTypeName",
+                        "src": "1574:7:1"
+                      }
+                    ],
+                    "id": 148,
+                    "name": "VariableDeclaration",
+                    "src": "1574:15:1"
+                  },
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "indexed": false,
+                      "name": "_kwh",
+                      "scope": 152,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "uint256",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "uint256",
+                          "type": "uint256"
+                        },
+                        "id": 149,
+                        "name": "ElementaryTypeName",
+                        "src": "1591:7:1"
+                      }
+                    ],
+                    "id": 150,
+                    "name": "VariableDeclaration",
+                    "src": "1591:12:1"
+                  }
+                ],
+                "id": 151,
+                "name": "ParameterList",
+                "src": "1573:31:1"
+              }
+            ],
+            "id": 152,
+            "name": "EventDefinition",
+            "src": "1551:54:1"
+          },
+          {
+            "attributes": {
+              "anonymous": false,
+              "name": "logKwhConsumption"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "indexed": false,
+                      "name": "_sender",
+                      "scope": 158,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 153,
+                        "name": "ElementaryTypeName",
+                        "src": "1632:7:1"
+                      }
+                    ],
+                    "id": 154,
+                    "name": "VariableDeclaration",
+                    "src": "1632:15:1"
+                  },
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "indexed": false,
+                      "name": "_kwh",
+                      "scope": 158,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "uint256",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "uint256",
+                          "type": "uint256"
+                        },
+                        "id": 155,
+                        "name": "ElementaryTypeName",
+                        "src": "1649:7:1"
+                      }
+                    ],
+                    "id": 156,
+                    "name": "VariableDeclaration",
+                    "src": "1649:12:1"
+                  }
+                ],
+                "id": 157,
+                "name": "ParameterList",
+                "src": "1631:31:1"
+              }
+            ],
+            "id": 158,
+            "name": "EventDefinition",
+            "src": "1608:55:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "implemented": true,
+              "isConstructor": false,
+              "name": "whitelistProducer",
+              "payable": false,
+              "scope": 248,
+              "stateMutability": "nonpayable",
+              "superFunction": 125,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_producer",
+                      "scope": 173,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 159,
+                        "name": "ElementaryTypeName",
+                        "src": "1745:7:1"
+                      }
+                    ],
+                    "id": 160,
+                    "name": "VariableDeclaration",
+                    "src": "1745:17:1"
+                  }
+                ],
+                "id": 161,
+                "name": "ParameterList",
+                "src": "1744:19:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 164,
+                "name": "ParameterList",
+                "src": "1783:0:1"
+              },
+              {
+                "attributes": {
+                  "arguments": [
+                    null
+                  ]
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "argumentTypes": null,
+                      "overloadedDeclarations": [
+                        null
+                      ],
+                      "referencedDeclaration": 376,
+                      "type": "modifier ()",
+                      "value": "onlyOwner"
+                    },
+                    "id": 162,
+                    "name": "Identifier",
+                    "src": "1773:9:1"
+                  }
+                ],
+                "id": 163,
+                "name": "ModifierInvocation",
+                "src": "1773:9:1"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "operator": "=",
+                          "type": "bool"
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": true,
+                              "member_name": "valid_producer",
+                              "referencedDeclaration": 113,
+                              "type": "bool"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "type": "struct MeterInterface.Device storage ref"
+                                },
+                                "children": [
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 118,
+                                      "type": "mapping(address => struct MeterInterface.Device storage ref)",
+                                      "value": "device_index"
+                                    },
+                                    "id": 165,
+                                    "name": "Identifier",
+                                    "src": "1789:12:1"
+                                  },
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 160,
+                                      "type": "address",
+                                      "value": "_producer"
+                                    },
+                                    "id": 166,
+                                    "name": "Identifier",
+                                    "src": "1802:9:1"
+                                  }
+                                ],
+                                "id": 167,
+                                "name": "IndexAccess",
+                                "src": "1789:23:1"
+                              }
+                            ],
+                            "id": 168,
+                            "name": "MemberAccess",
+                            "src": "1789:38:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "hexvalue": "74727565",
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": true,
+                              "lValueRequested": false,
+                              "subdenomination": null,
+                              "token": "bool",
+                              "type": "bool",
+                              "value": "true"
+                            },
+                            "id": 169,
+                            "name": "Literal",
+                            "src": "1830:4:1"
+                          }
+                        ],
+                        "id": 170,
+                        "name": "Assignment",
+                        "src": "1789:45:1"
+                      }
+                    ],
+                    "id": 171,
+                    "name": "ExpressionStatement",
+                    "src": "1789:45:1"
+                  }
+                ],
+                "id": 172,
+                "name": "Block",
+                "src": "1783:56:1"
+              }
+            ],
+            "id": 173,
+            "name": "FunctionDefinition",
+            "src": "1718:121:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "implemented": true,
+              "isConstructor": false,
+              "name": "whitelistConsumer",
+              "payable": false,
+              "scope": 248,
+              "stateMutability": "nonpayable",
+              "superFunction": 130,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_consumer",
+                      "scope": 188,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 174,
+                        "name": "ElementaryTypeName",
+                        "src": "1922:7:1"
+                      }
+                    ],
+                    "id": 175,
+                    "name": "VariableDeclaration",
+                    "src": "1922:17:1"
+                  }
+                ],
+                "id": 176,
+                "name": "ParameterList",
+                "src": "1921:19:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 179,
+                "name": "ParameterList",
+                "src": "1960:0:1"
+              },
+              {
+                "attributes": {
+                  "arguments": [
+                    null
+                  ]
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "argumentTypes": null,
+                      "overloadedDeclarations": [
+                        null
+                      ],
+                      "referencedDeclaration": 376,
+                      "type": "modifier ()",
+                      "value": "onlyOwner"
+                    },
+                    "id": 177,
+                    "name": "Identifier",
+                    "src": "1950:9:1"
+                  }
+                ],
+                "id": 178,
+                "name": "ModifierInvocation",
+                "src": "1950:9:1"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "operator": "=",
+                          "type": "bool"
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": true,
+                              "member_name": "valid_consumer",
+                              "referencedDeclaration": 111,
+                              "type": "bool"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "type": "struct MeterInterface.Device storage ref"
+                                },
+                                "children": [
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 118,
+                                      "type": "mapping(address => struct MeterInterface.Device storage ref)",
+                                      "value": "device_index"
+                                    },
+                                    "id": 180,
+                                    "name": "Identifier",
+                                    "src": "1966:12:1"
+                                  },
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 175,
+                                      "type": "address",
+                                      "value": "_consumer"
+                                    },
+                                    "id": 181,
+                                    "name": "Identifier",
+                                    "src": "1979:9:1"
+                                  }
+                                ],
+                                "id": 182,
+                                "name": "IndexAccess",
+                                "src": "1966:23:1"
+                              }
+                            ],
+                            "id": 183,
+                            "name": "MemberAccess",
+                            "src": "1966:38:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "hexvalue": "74727565",
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": true,
+                              "lValueRequested": false,
+                              "subdenomination": null,
+                              "token": "bool",
+                              "type": "bool",
+                              "value": "true"
+                            },
+                            "id": 184,
+                            "name": "Literal",
+                            "src": "2007:4:1"
+                          }
+                        ],
+                        "id": 185,
+                        "name": "Assignment",
+                        "src": "1966:45:1"
+                      }
+                    ],
+                    "id": 186,
+                    "name": "ExpressionStatement",
+                    "src": "1966:45:1"
+                  }
+                ],
+                "id": 187,
+                "name": "Block",
+                "src": "1960:56:1"
+              }
+            ],
+            "id": 188,
+            "name": "FunctionDefinition",
+            "src": "1895:121:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "implemented": true,
+              "isConstructor": false,
+              "modifiers": [
+                null
+              ],
+              "name": "generateKwh",
+              "payable": false,
+              "scope": 248,
+              "stateMutability": "nonpayable",
+              "superFunction": 135,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_kwh",
+                      "scope": 233,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "uint256",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "uint256",
+                          "type": "uint256"
+                        },
+                        "id": 189,
+                        "name": "ElementaryTypeName",
+                        "src": "2246:7:1"
+                      }
+                    ],
+                    "id": 190,
+                    "name": "VariableDeclaration",
+                    "src": "2246:12:1"
+                  }
+                ],
+                "id": 191,
+                "name": "ParameterList",
+                "src": "2245:14:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 192,
+                "name": "ParameterList",
+                "src": "2269:0:1"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "isStructConstructorCall": false,
+                          "lValueRequested": false,
+                          "names": [
+                            null
+                          ],
+                          "type": "tuple()",
+                          "type_conversion": false
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": [
+                                {
+                                  "typeIdentifier": "t_bool",
+                                  "typeString": "bool"
+                                }
+                              ],
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 984,
+                              "type": "function (bool) pure",
+                              "value": "require"
+                            },
+                            "id": 193,
+                            "name": "Identifier",
+                            "src": "2345:7:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "member_name": "valid_producer",
+                              "referencedDeclaration": 113,
+                              "type": "bool"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "type": "struct MeterInterface.Device storage ref"
+                                },
+                                "children": [
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 118,
+                                      "type": "mapping(address => struct MeterInterface.Device storage ref)",
+                                      "value": "device_index"
+                                    },
+                                    "id": 194,
+                                    "name": "Identifier",
+                                    "src": "2353:12:1"
+                                  },
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "isConstant": false,
+                                      "isLValue": false,
+                                      "isPure": false,
+                                      "lValueRequested": false,
+                                      "member_name": "sender",
+                                      "referencedDeclaration": null,
+                                      "type": "address"
+                                    },
+                                    "children": [
+                                      {
+                                        "attributes": {
+                                          "argumentTypes": null,
+                                          "overloadedDeclarations": [
+                                            null
+                                          ],
+                                          "referencedDeclaration": 981,
+                                          "type": "msg",
+                                          "value": "msg"
+                                        },
+                                        "id": 195,
+                                        "name": "Identifier",
+                                        "src": "2366:3:1"
+                                      }
+                                    ],
+                                    "id": 196,
+                                    "name": "MemberAccess",
+                                    "src": "2366:10:1"
+                                  }
+                                ],
+                                "id": 197,
+                                "name": "IndexAccess",
+                                "src": "2353:24:1"
+                              }
+                            ],
+                            "id": 198,
+                            "name": "MemberAccess",
+                            "src": "2353:39:1"
+                          }
+                        ],
+                        "id": 199,
+                        "name": "FunctionCall",
+                        "src": "2345:48:1"
+                      }
+                    ],
+                    "id": 200,
+                    "name": "ExpressionStatement",
+                    "src": "2345:48:1"
+                  },
+                  {
+                    "attributes": {
+                      "assignments": [
+                        202
+                      ]
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "constant": false,
+                          "name": "new_kwh",
+                          "scope": 233,
+                          "stateVariable": false,
+                          "storageLocation": "default",
+                          "type": "uint256",
+                          "value": null,
+                          "visibility": "internal"
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "name": "uint256",
+                              "type": "uint256"
+                            },
+                            "id": 201,
+                            "name": "ElementaryTypeName",
+                            "src": "2532:7:1"
+                          }
+                        ],
+                        "id": 202,
+                        "name": "VariableDeclaration",
+                        "src": "2532:15:1"
+                      },
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "isStructConstructorCall": false,
+                          "lValueRequested": false,
+                          "names": [
+                            null
+                          ],
+                          "type": "uint256",
+                          "type_conversion": false
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": [
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              ],
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "member_name": "sub",
+                              "referencedDeclaration": 321,
+                              "type": "function (uint256,uint256) pure returns (uint256)"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "overloadedDeclarations": [
+                                    null
+                                  ],
+                                  "referencedDeclaration": 190,
+                                  "type": "uint256",
+                                  "value": "_kwh"
+                                },
+                                "id": 203,
+                                "name": "Identifier",
+                                "src": "2550:4:1"
+                              }
+                            ],
+                            "id": 204,
+                            "name": "MemberAccess",
+                            "src": "2550:8:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "member_name": "kwh_produced",
+                              "referencedDeclaration": 107,
+                              "type": "uint256"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "type": "struct MeterInterface.Device storage ref"
+                                },
+                                "children": [
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 118,
+                                      "type": "mapping(address => struct MeterInterface.Device storage ref)",
+                                      "value": "device_index"
+                                    },
+                                    "id": 205,
+                                    "name": "Identifier",
+                                    "src": "2559:12:1"
+                                  },
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "isConstant": false,
+                                      "isLValue": false,
+                                      "isPure": false,
+                                      "lValueRequested": false,
+                                      "member_name": "sender",
+                                      "referencedDeclaration": null,
+                                      "type": "address"
+                                    },
+                                    "children": [
+                                      {
+                                        "attributes": {
+                                          "argumentTypes": null,
+                                          "overloadedDeclarations": [
+                                            null
+                                          ],
+                                          "referencedDeclaration": 981,
+                                          "type": "msg",
+                                          "value": "msg"
+                                        },
+                                        "id": 206,
+                                        "name": "Identifier",
+                                        "src": "2572:3:1"
+                                      }
+                                    ],
+                                    "id": 207,
+                                    "name": "MemberAccess",
+                                    "src": "2572:10:1"
+                                  }
+                                ],
+                                "id": 208,
+                                "name": "IndexAccess",
+                                "src": "2559:24:1"
+                              }
+                            ],
+                            "id": 209,
+                            "name": "MemberAccess",
+                            "src": "2559:37:1"
+                          }
+                        ],
+                        "id": 210,
+                        "name": "FunctionCall",
+                        "src": "2550:47:1"
+                      }
+                    ],
+                    "id": 211,
+                    "name": "VariableDeclarationStatement",
+                    "src": "2532:65:1"
+                  },
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "isStructConstructorCall": false,
+                          "lValueRequested": false,
+                          "names": [
+                            null
+                          ],
+                          "type": "tuple()",
+                          "type_conversion": false
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": [
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              ],
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "member_name": "requestMint",
+                              "referencedDeclaration": 34,
+                              "type": "function (uint256) external"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "overloadedDeclarations": [
+                                    null
+                                  ],
+                                  "referencedDeclaration": 120,
+                                  "type": "contract MicrogridExchangeInterface",
+                                  "value": "microgrid_exchange"
+                                },
+                                "id": 212,
+                                "name": "Identifier",
+                                "src": "2667:18:1"
+                              }
+                            ],
+                            "id": 214,
+                            "name": "MemberAccess",
+                            "src": "2667:30:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 202,
+                              "type": "uint256",
+                              "value": "new_kwh"
+                            },
+                            "id": 215,
+                            "name": "Identifier",
+                            "src": "2698:7:1"
+                          }
+                        ],
+                        "id": 216,
+                        "name": "FunctionCall",
+                        "src": "2667:39:1"
+                      }
+                    ],
+                    "id": 217,
+                    "name": "ExpressionStatement",
+                    "src": "2667:39:1"
+                  },
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "operator": "=",
+                          "type": "uint256"
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": true,
+                              "member_name": "kwh_produced",
+                              "referencedDeclaration": 107,
+                              "type": "uint256"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "type": "struct MeterInterface.Device storage ref"
+                                },
+                                "children": [
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "overloadedDeclarations": [
+                                        null
+                                      ],
+                                      "referencedDeclaration": 118,
+                                      "type": "mapping(address => struct MeterInterface.Device storage ref)",
+                                      "value": "device_index"
+                                    },
+                                    "id": 218,
+                                    "name": "Identifier",
+                                    "src": "2713:12:1"
+                                  },
+                                  {
+                                    "attributes": {
+                                      "argumentTypes": null,
+                                      "isConstant": false,
+                                      "isLValue": false,
+                                      "isPure": false,
+                                      "lValueRequested": false,
+                                      "member_name": "sender",
+                                      "referencedDeclaration": null,
+                                      "type": "address"
+                                    },
+                                    "children": [
+                                      {
+                                        "attributes": {
+                                          "argumentTypes": null,
+                                          "overloadedDeclarations": [
+                                            null
+                                          ],
+                                          "referencedDeclaration": 981,
+                                          "type": "msg",
+                                          "value": "msg"
+                                        },
+                                        "id": 219,
+                                        "name": "Identifier",
+                                        "src": "2726:3:1"
+                                      }
+                                    ],
+                                    "id": 220,
+                                    "name": "MemberAccess",
+                                    "src": "2726:10:1"
+                                  }
+                                ],
+                                "id": 221,
+                                "name": "IndexAccess",
+                                "src": "2713:24:1"
+                              }
+                            ],
+                            "id": 222,
+                            "name": "MemberAccess",
+                            "src": "2713:37:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 190,
+                              "type": "uint256",
+                              "value": "_kwh"
+                            },
+                            "id": 223,
+                            "name": "Identifier",
+                            "src": "2753:4:1"
+                          }
+                        ],
+                        "id": 224,
+                        "name": "Assignment",
+                        "src": "2713:44:1"
+                      }
+                    ],
+                    "id": 225,
+                    "name": "ExpressionStatement",
+                    "src": "2713:44:1"
+                  },
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "isStructConstructorCall": false,
+                          "lValueRequested": false,
+                          "names": [
+                            null
+                          ],
+                          "type": "tuple()",
+                          "type_conversion": false
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": [
+                                {
+                                  "typeIdentifier": "t_address",
+                                  "typeString": "address"
+                                },
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              ],
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 152,
+                              "type": "function (address,uint256)",
+                              "value": "logKwhGeneration"
+                            },
+                            "id": 226,
+                            "name": "Identifier",
+                            "src": "2763:16:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "member_name": "sender",
+                              "referencedDeclaration": null,
+                              "type": "address"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "overloadedDeclarations": [
+                                    null
+                                  ],
+                                  "referencedDeclaration": 981,
+                                  "type": "msg",
+                                  "value": "msg"
+                                },
+                                "id": 227,
+                                "name": "Identifier",
+                                "src": "2780:3:1"
+                              }
+                            ],
+                            "id": 228,
+                            "name": "MemberAccess",
+                            "src": "2780:10:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 190,
+                              "type": "uint256",
+                              "value": "_kwh"
+                            },
+                            "id": 229,
+                            "name": "Identifier",
+                            "src": "2792:4:1"
+                          }
+                        ],
+                        "id": 230,
+                        "name": "FunctionCall",
+                        "src": "2763:34:1"
+                      }
+                    ],
+                    "id": 231,
+                    "name": "ExpressionStatement",
+                    "src": "2763:34:1"
+                  }
+                ],
+                "id": 232,
+                "name": "Block",
+                "src": "2269:533:1"
+              }
+            ],
+            "id": 233,
+            "name": "FunctionDefinition",
+            "src": "2225:577:1"
+          },
+          {
+            "attributes": {
+              "constant": false,
+              "implemented": true,
+              "isConstructor": false,
+              "name": "setExchange",
+              "payable": false,
+              "scope": 248,
+              "stateMutability": "nonpayable",
+              "superFunction": 140,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "_energy_exchange",
+                      "scope": 247,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "type": "address"
+                        },
+                        "id": 234,
+                        "name": "ElementaryTypeName",
+                        "src": "2829:7:1"
+                      }
+                    ],
+                    "id": 235,
+                    "name": "VariableDeclaration",
+                    "src": "2829:24:1"
+                  }
+                ],
+                "id": 236,
+                "name": "ParameterList",
+                "src": "2828:26:1"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 239,
+                "name": "ParameterList",
+                "src": "2874:0:1"
+              },
+              {
+                "attributes": {
+                  "arguments": [
+                    null
+                  ]
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "argumentTypes": null,
+                      "overloadedDeclarations": [
+                        null
+                      ],
+                      "referencedDeclaration": 376,
+                      "type": "modifier ()",
+                      "value": "onlyOwner"
+                    },
+                    "id": 237,
+                    "name": "Identifier",
+                    "src": "2864:9:1"
+                  }
+                ],
+                "id": 238,
+                "name": "ModifierInvocation",
+                "src": "2864:9:1"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "attributes": {
+                          "argumentTypes": null,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "operator": "=",
+                          "type": "contract MicrogridExchangeInterface"
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "overloadedDeclarations": [
+                                null
+                              ],
+                              "referencedDeclaration": 120,
+                              "type": "contract MicrogridExchangeInterface",
+                              "value": "microgrid_exchange"
+                            },
+                            "id": 240,
+                            "name": "Identifier",
+                            "src": "2880:18:1"
+                          },
+                          {
+                            "attributes": {
+                              "argumentTypes": null,
+                              "isConstant": false,
+                              "isLValue": false,
+                              "isPure": false,
+                              "isStructConstructorCall": false,
+                              "lValueRequested": false,
+                              "names": [
+                                null
+                              ],
+                              "type": "contract MicrogridExchangeInterface",
+                              "type_conversion": true
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "argumentTypes": [
+                                    {
+                                      "typeIdentifier": "t_address",
+                                      "typeString": "address"
+                                    }
+                                  ],
+                                  "overloadedDeclarations": [
+                                    null
+                                  ],
+                                  "referencedDeclaration": 47,
+                                  "type": "type(contract MicrogridExchangeInterface)",
+                                  "value": "MicrogridExchangeInterface"
+                                },
+                                "id": 241,
+                                "name": "Identifier",
+                                "src": "2901:26:1"
+                              },
+                              {
+                                "attributes": {
+                                  "argumentTypes": null,
+                                  "overloadedDeclarations": [
+                                    null
+                                  ],
+                                  "referencedDeclaration": 235,
+                                  "type": "address",
+                                  "value": "_energy_exchange"
+                                },
+                                "id": 242,
+                                "name": "Identifier",
+                                "src": "2928:16:1"
+                              }
+                            ],
+                            "id": 243,
+                            "name": "FunctionCall",
+                            "src": "2901:44:1"
+                          }
+                        ],
+                        "id": 244,
+                        "name": "Assignment",
+                        "src": "2880:65:1"
+                      }
+                    ],
+                    "id": 245,
+                    "name": "ExpressionStatement",
+                    "src": "2880:65:1"
+                  }
+                ],
+                "id": 246,
+                "name": "Block",
+                "src": "2874:76:1"
+              }
+            ],
+            "id": 247,
+            "name": "FunctionDefinition",
+            "src": "2808:142:1"
+          }
+        ],
+        "id": 248,
+        "name": "ContractDefinition",
+        "src": "1415:1538:1"
+      }
+    ],
+    "id": 249,
+    "name": "SourceUnit",
+    "src": "0:2955:1"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.4.19+commit.c4cbbb05.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "1.0.1",
+  "updatedAt": "2018-02-17T21:29:58.102Z"
+}
