@@ -1,2 +1,2 @@
 # EthDenver
-Microgrid energy trading platform.
+initaial ? off to a good start.
