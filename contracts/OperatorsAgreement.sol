@@ -7,6 +7,11 @@ import "../../zeppelin-solidity/contracts/math/SafeMath.sol";
 /// @title The interface for a metering device.
 contract MeterInterface is Ownable {
   
+  modifier whitelisted(address _asset) {
+    // require(asset_whitelist[_asset]); // Comment out for testing
+    _;
+  }
+  
   /* @dev The device contains all the production information about a meter.
    * note that kwh is the standard units of energy Kilo-Watt-Hour
    */
@@ -18,27 +23,20 @@ contract MeterInterface is Ownable {
     // @dev kwh_consumed is the positive transfer of energy from the bus
     // to the device.
     uint256 kwh_consumed;
-
-    // @dev Device's current designation as a consumer;
-    bool valid_consumer;
-
-    // @dev Device's current designation as a producer;
-    bool valid_producer;
   }
 
   // @dev An address mapping to the Device struct.
   mapping (address => Device) public device_index;
+  mapping (address => bool) public asset_whitelist;
   MicrogridExchangeInterface microgrid_exchange;
 
   // @dev assigns the right to produce to a device.
-  function whitelistProducer(address _producer) external;
+  function whitelistAsset(address _producer) external;
 
-  // @dev assigns the right to consume to a device.
-  function whitelistConsumer(address _consumer) external;
-  
   // @dev Generate event log of kilowatt-hours generated.
   function generateKwh(uint256 _kwh) external;
 
+  // @dev Set's the target microgrid exchange contract address
   function setExchange(address _energy_exchange) external;
 }
 
@@ -48,16 +46,13 @@ contract OperatorsAgreement is MeterInterface {
   // @dev Event used to log the sender's ID and the am
   event logKwhGeneration(address _sender, uint256 _kwh);
   event logKwhConsumption(address _sender, uint256 _kwh);
+  event whitelistedAsset(address _asset);
 
   // @dev assigns the right to produce to a device
-  function whitelistProducer(address _producer) external onlyOwner {
-    device_index[_producer].valid_producer = true;
+  function whitelistAsset(address _asset) external onlyOwner {
+    asset_whitelist[_asset] = true;
+    whitelistedAsset(_asset);
   }
-
-  // @dev assigns the right to consume to a device.
-  function whitelistConsumer(address _consumer) external onlyOwner {
-    device_index[_consumer].valid_consumer = true;
-  } 
 
   /** @dev Allow trusted device to log generated kwh with
     * microgrid exchange.
@@ -65,9 +60,7 @@ contract OperatorsAgreement is MeterInterface {
     * @return Boolean if operation completes
     *
     */
-  function generateKwh(uint256 _kwh) external {
-    // @dev add the newly generated watt-hours to available for trade
-    require(device_index[msg.sender].valid_producer);
+  function generateKwh(uint256 _kwh) external whitelisted(msg.sender) {
 
     // @dev kwh are a totalized counter, find the latest kwh generated.
     // @notice the roll over must be dealt with gracefully.
@@ -85,4 +78,3 @@ contract OperatorsAgreement is MeterInterface {
   }
 
 }
-

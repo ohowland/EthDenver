@@ -1,138 +1,92 @@
 from web3 import Web3, IPCProvider, HTTPProvider 
-from solc import compile_source
-
-def connect_ipc(path='/home/owen/dev/private-chain/chain-data/geth.ipc'):
-    return Web3(IPCProvider(path))
+import json
+import logging
+from time import sleep
 
 def connect_http(address='http://localhost:8545'):
     return Web3(HTTPProvider(address))
 
-def connect_testnet(path='/home/owen/.rinkeby/geth.ipc'):
-    return Web3(IPCProvider(path))
-
-def bootstrap_test():
+def bootstrap():
+    ''' bootstrap is purely for testing - to be removed. '''
     web3 = connect_http()
-    path = 'contracts/Microgrid.sol'
+    path = '../build/contracts/MicrogridExchange.json'
 
     new_contract = ContractFactory().factory(web3, path)
-    mc = MicrogridContract(web3, new_contract)
-    
-    return mc
+    mx = MicrogridExchange(web3, new_contract)
 
-''' Meter Class used as context for production and energy
-    availability status posted on-chain
-'''
-class Meter():
-    def __init__(self, args):
-        self.wh_produced    = args[0]  # Totalized Wh export
-        self.wh_consumed    = args[1]  # Totalized Wh import
-        self.wh_available   = args[2]  # Wh available for trade
-        self.wh_deficit     = args[3]  # Wh required for settlement
-        self.valid_consumer = args[4]  # Device can post consumption
-        self.valid_producer = args[5]  # Device can post production
+    return mx
 
-''' Contract factory for compiling and creating the microgrid contract
-'''
+
 class ContractFactory():
+    ''' Factory function for MicrogridExchange '''
     def __init__(self):
         pass
 
     def factory(self, web3, local_contract_path):
-        with open(local_contract_path, 'r') as contract_src_file:
-            compiled_contract = compile_source(contract_src_file.read())
-  
-        ''' Assuming the contract to deploy shares the same name
-            as the contract file itself
-        '''
-        contract_name = local_contract_path.split('/')[-1][:-4]
-        contract_interface = compiled_contract[
-                '<stdin>:{}'.format(contract_name)
-        ]
+        with open(local_contract_path, 'r') as contract_json:
+            compiled_contract = json.loads(contract_json.read())
 
         contract = web3.eth.contract(
-                abi=contract_interface['abi'], 
-                bytecode=contract_interface['bin']
+                abi=compiled_contract['abi'],
+                bytecode=compiled_contract['bytecode']
         )
 
         return contract
 
 
-''' The MicrogridContract class is designed to interact with the 
-    Meter.sol Solidity contact. It maintains the contract as private 
-    data, and allows interaction with the public functions of the 
-    MicrogridContract.
-'''
-class MicrogridContract(object):
+class MicrogridExchange(object):
+    ''' The MicrogridExchange class is designed to interact with the
+        Exchange.sol Solidity contact. It maintains the contract as private
+        data, and allows interaction with the public functions of the
+        MicrogridExchange Contract.
+    '''
+
     def __init__(self, web3, contract):
-        self.contract = contract  # Compiled Microgrid.sol
-        self.web3 = web3          # Current web3 client
-        self.tx_info = {          # Standard tx_info
+        self.contract = contract        # Compiled Microgrid.sol
+        self.web3 = web3                # Current web3 client
+        self.tx_microgrid_exchange = {  # microgrid_exchange tx info
                 'from': self.web3.eth.coinbase,
-                'gas' : 5000000
-            }
-    
-        self.deploy();
+                'gas' : 5000000,
+                'to' : ''
+        }
 
-    """ Deploy contract at path using client"""
-    def deploy(self):
-        
-        tx_address = self.contract.deploy(self.tx_info)
+    def setMicrogridExchangeAddress(self, address):
+        ''' Setter for the Microgrid Exchange contract transaction metadata 'to' address
+            @modifiers ownerOnly
+        '''
+        self.tx_microgrid_exchange['to'] = address
 
-        tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
-        self.contract.address = tx_receipt['contractAddress']
-        
-        return tx_receipt
+    def listenValidationRequest(self):
+        ''' listen for validationRequest events. Callback to validate function on event.
+            If event is validated then approve the creation of KWH tokens.
+        '''
+        pass
+        # Having a hell of a time with the event filtering.
+        # Waiting for v4 to use contract.eventFilter
+        # uhhhgggaaaaa
 
-    ''' ceoAddress: Getter for CEO's address
-        @returns: current CEO's address
-    '''
-    def ceoAddress(self):
-        return self.contract.call().ceo_address() 
-
-    ''' getDevice: Getter for device_index map
-        @param address: The device's address
-        @return: Device information
-    '''
-    def getDevice(self, address):
-        device = self.contract.call().device_index(address)
-        return Meter(device)
-    
-    ''' setCEO: transfers the title of CEO to new address.
-        This can only be done by current CEO.
-        @params new_ceo: Address of new CEO
-        @returns: tx_receipt
-    '''
-    def setCEO(self, new_ceo):
-        tx_address = self.contract.transact(self.tx_info).\
-                setCEO(new_ceo)
+    def approveMint(self, asset_address, amount):
+        ''' Approve the minting of kWh for asset address
+            @modifiers ownerOnly
+        '''
+        tx_address = self.contract.transact(self.tx_microgrid_exchange).\
+            approveMint(asset_address, amount)
         tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
         return tx_receipt
 
-    def designateProducer(self, producer_address):
-        tx_address = self.contract.transact(self.tx_info).\
-                designateProducer(producer_address)
+    def whitelistAsset(self, asset_address):
+        ''' Adds asset_address to Microgrid Exchange whitelist. Whitelisted assets may call the Microgrid Exchange's
+            public functions.
+            @modifiers ownerOnly
+        '''
+        tx_address = self.contract.transact(self.tx_microgrid_exchange).\
+            whitelistAsset(asset_address)
         tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
         return tx_receipt
 
-    def designateConsumer(self, consumer_address):
-        tx_address = self.contract.transact(self.tx_info).\
-                designateConsumer(consumer_address)
-        tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
-        return tx_receipt
 
-    ''' These functions are accessed by non-ceo. a new microgrid
-        contract client needs to be created for each meter on
-        the network
-    '''
-    def generateWattHours(self, watt_hours):
-        tx_address = self.contract.transact(self.tx_info).\
-                generateWattHours(watt_hours)
-        tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
-        return tx_receipt
+if __name__ == '__main__':
+    microgrid_exchange = bootstrap()
+    #logging.info("listening for events on {}".format("https://localhost:8545"))
 
-    def consumeWattHours(self, watt_hours):
-        tx_address = self.contract.transact(self.tx_info).\
-                consumeWattHours(watt_hours)
-        tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
-        return tx_receipt
-
+    microgrid_exchange.listenValidationRequest()

@@ -15,7 +15,7 @@ contract MicrogridExchangeInterface is MintableToken, BurnableToken {
   mapping (address => bool) public asset_whitelist;
   
   modifier whitelisted(address _asset) {
-    require(asset_whitelist[_asset]);
+    // require(asset_whitelist[_asset]); // Comment out for testing
     _;
   }
 
