@@ -117,11 +117,11 @@ class OperatorsAgreement(object):
 if __name__ == '__main__':
     oa = bootstrap()
 
-    oa.setMicrogridExchangeAddress(input('exchange: '))
-    oa.setOperatorsAgreementAddress(input('operators: '))
+    oa.setMicrogridExchangeAddress(str(input('exchange address: ')))
+    oa.setOperatorsAgreementAddress(str(input('operator address: ')))
 
-    accounts = oa.web3.eth.accounts
-    oa.whitelistAsset(accounts[0])
+    oa.whitelistAsset(oa.web3.eth.coinbase)
+    oa.updateTotalKwh(321);
 
 
 

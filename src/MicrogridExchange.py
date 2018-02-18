@@ -87,6 +87,4 @@ class MicrogridExchange(object):
 
 if __name__ == '__main__':
     microgrid_exchange = bootstrap()
-    #logging.info("listening for events on {}".format("https://localhost:8545"))
-
     microgrid_exchange.listenValidationRequest()
