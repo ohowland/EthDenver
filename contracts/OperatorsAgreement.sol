@@ -4,76 +4,78 @@ import "../../EthDenver/contracts/Exchange.sol";
 import "../../zeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../../zeppelin-solidity/contracts/math/SafeMath.sol";
 
-/// @title The interface for a metering device.
-contract MeterInterface is Ownable {
-  
+
+contract OperatorsAgreementInterface is Ownable {
+  /* @title The interface for OperatorsAgreement 
+   * @dev implements OpenZeppelin's Ownable
+   */
+
   modifier whitelisted(address _asset) {
-    // require(asset_whitelist[_asset]); // Comment out for testing
+    require(asset_whitelist[_asset]); 
     _;
   }
   
-  /* @dev The device contains all the production information about a meter.
-   * note that kwh is the standard units of energy Kilo-Watt-Hour
+  struct Asset { 
+  /* @dev Asset struct contains the production/consumption data
+   * attributed to a device.
+   * @notice kwh is the standard units of energy kilowatt-hour
    */
-  struct Device { 
-    // @dev kwh_produced is the positive transfer of energy from the
-    // device to the bus.
-    uint256 kwh_produced;
 
-    // @dev kwh_consumed is the positive transfer of energy from the bus
-    // to the device.
-    uint256 kwh_consumed;
+    uint256 kwh_produced; // positive transfer of energy to bus
+    uint256 kwh_consumed; // negative transfer of energy to bus
   }
 
-  // @dev An address mapping to the Device struct.
-  mapping (address => Device) public device_index;
-  mapping (address => bool) public asset_whitelist;
-  MicrogridExchangeInterface microgrid_exchange;
+  mapping (address => Asset) public asset_index;  // Access to Asset struct
+  mapping (address => bool) public asset_whitelist; // Access to whitelist
+  
+  MicrogridExchangeInterface microgrid_exchange;    // MicrogridExchange ABI(?)
 
-  // @dev assigns the right to produce to a device.
   function whitelistAsset(address _producer) external;
 
-  // @dev Generate event log of kilowatt-hours generated.
-  function generateKwh(uint256 _kwh) external;
+  function updateTotalKwh(uint256 _kwh) external;
 
-  // @dev Set's the target microgrid exchange contract address
   function setExchange(address _energy_exchange) external;
 }
 
-contract OperatorsAgreement is MeterInterface {
+
+contract OperatorsAgreement is OperatorsAgreementInterface {
+  /* @title The implementation of the OperatorsAgrrement 
+   * @dev 
+  */
+  
   using SafeMath for uint256;
 
-  // @dev Event used to log the sender's ID and the am
-  event logKwhGeneration(address _sender, uint256 _kwh);
-  event logKwhConsumption(address _sender, uint256 _kwh);
-  event whitelistedAsset(address _asset);
+  event logKwhGeneration(address _sender, uint256 _kwh);  // Asset kwh generation event
+  event logKwhConsumption(address _sender, uint256 _kwh); // Asset kwh consumption event
+  event whitelistedAsset(address _asset);                 // Asset whitelisting event
 
-  // @dev assigns the right to produce to a device
   function whitelistAsset(address _asset) external onlyOwner {
+    /* @dev whitelisting an asset allows it to create transactions
+     * with the MicrogridExchange contract/.
+     */
+    
     asset_whitelist[_asset] = true;
     whitelistedAsset(_asset);
   }
 
-  /** @dev Allow trusted device to log generated kwh with
-    * microgrid exchange.
-    * @param _kwh The current totalized production watt hours
-    * @return Boolean if operation completes
-    *
-    */
-  function generateKwh(uint256 _kwh) external whitelisted(msg.sender) {
-
-    // @dev kwh are a totalized counter, find the latest kwh generated.
-    // @notice the roll over must be dealt with gracefully.
-    uint256 new_kwh = _kwh.sub(device_index[msg.sender].kwh_produced);   
-
-    // @dev Call the external microgrid exchange contract  
+  function updateTotalKwh(uint256 _kwh) external whitelisted(msg.sender) {
+    /* @dev Allow trusted device to log generated kwh with
+     * microgrid exchange.
+     * @param _kwh The current totalized production watt hours
+     */
+    
+    uint256 new_kwh = _kwh.sub(asset_index[msg.sender].kwh_produced);   
     microgrid_exchange.requestMint(new_kwh);
 
-    device_index[msg.sender].kwh_produced = _kwh;
+    asset_index[msg.sender].kwh_produced = _kwh;
     logKwhGeneration(msg.sender, _kwh);
   }
-  
+
   function setExchange(address _energy_exchange) external onlyOwner {
+    /* @dev sets the target MicroGrid exchange
+     * @param the MicrogridExchange's deployed contract address
+     */
+
     microgrid_exchange = MicrogridExchangeInterface(_energy_exchange);
   }
 

@@ -104,12 +104,12 @@ class OperatorsAgreement(object):
         return tx_receipt
 
 
-    def generateKwh(self, kwh):
+    def updateTotalKwh(self, kwh):
         ''' requests an updated energy production kwh on the Microgrid Exchange ledger
             @modifiers whitelisted
         '''
         tx_address = self.contract.transact(self.tx_operators_agreement).\
-            generateKwh(kwh)
+            updateTotalKwh(kwh)
         tx_receipt = self.web3.eth.getTransactionReceipt(tx_address)
         return tx_receipt
 
